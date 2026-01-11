@@ -4,28 +4,23 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
--- Функция для драга (перетаскивания)
 local function MakeDraggable(frame)
     local dragging, dragInput, dragStart, startPos
-    
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = frame.Position
-            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
-    
     frame.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-    
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
@@ -37,8 +32,9 @@ end
 function VoidLib:CreateWindow(cfg)
     cfg = cfg or {}
     local TitleText = cfg.Title or "VOID.CC"
-    
-    -- Очистка старого GUI
+    local WinSize = cfg.Size or UDim2.new(0, 240, 0, 100) -- Можно менять размер окна
+    local WinPos = cfg.Position or UDim2.new(0.5, -120, 0.85, -60) -- Можно менять позицию
+
     if gethui then
         pcall(function() gethui():FindFirstChild("VoidLib_UI"):Destroy() end)
     elseif CoreGui:FindFirstChild("VoidLib_UI") then
@@ -53,8 +49,8 @@ function VoidLib:CreateWindow(cfg)
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "Main"
-    MainFrame.Size = UDim2.new(0, 240, 0, 100)
-    MainFrame.Position = UDim2.new(0.5, -120, 0.85, -60)
+    MainFrame.Size = WinSize
+    MainFrame.Position = WinPos
     MainFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     MainFrame.BorderSizePixel = 0
     MainFrame.ZIndex = 10
@@ -89,7 +85,7 @@ function VoidLib:CreateWindow(cfg)
     StrokeGradient.Parent = MainStroke
 
     local TitleLbl = Instance.new("TextLabel")
-    TitleLbl.Size = UDim2.new(0, 80, 0, 25)
+    TitleLbl.Size = UDim2.new(1, -20, 0, 25)
     TitleLbl.Position = UDim2.new(0, 10, 0, 4)
     TitleLbl.BackgroundTransparency = 1
     TitleLbl.Text = TitleText
@@ -108,7 +104,6 @@ function VoidLib:CreateWindow(cfg)
     }
     TitleGradient.Parent = TitleLbl
 
-    -- Анимация градиентов
     task.spawn(function()
         while MainFrame.Parent do
             StrokeGradient.Rotation = (StrokeGradient.Rotation + 2) % 360
@@ -117,7 +112,7 @@ function VoidLib:CreateWindow(cfg)
         end
     end)
     
-    -- Контейнер для информации (Target / Bar)
+    -- Контейнер для инфо (Target / Bar)
     local InfoContainer = Instance.new("Frame")
     InfoContainer.Name = "Info"
     InfoContainer.BackgroundTransparency = 1
@@ -130,7 +125,7 @@ function VoidLib:CreateWindow(cfg)
     TargetName.Name = "Target"
     TargetName.Size = UDim2.new(0.6, 0, 0, 18)
     TargetName.BackgroundTransparency = 1
-    TargetName.Text = "" 
+    TargetName.Text = "Waiting..." 
     TargetName.TextColor3 = Color3.fromRGB(220, 180, 255)
     TargetName.Font = Enum.Font.GothamBold
     TargetName.TextSize = 12
@@ -160,10 +155,7 @@ function VoidLib:CreateWindow(cfg)
     BarBG.BorderSizePixel = 0
     BarBG.ZIndex = 13
     BarBG.Parent = InfoContainer
-
-    local BarCorner = Instance.new("UICorner")
-    BarCorner.CornerRadius = UDim.new(1, 0)
-    BarCorner.Parent = BarBG
+    Instance.new("UICorner", BarBG).CornerRadius = UDim.new(1, 0)
 
     local BarFill = Instance.new("Frame")
     BarFill.Name = "BarFill"
@@ -172,10 +164,7 @@ function VoidLib:CreateWindow(cfg)
     BarFill.BorderSizePixel = 0
     BarFill.ZIndex = 14
     BarFill.Parent = BarBG
-
-    local FillCorner = Instance.new("UICorner")
-    FillCorner.CornerRadius = UDim.new(1, 0)
-    FillCorner.Parent = BarFill
+    Instance.new("UICorner", BarFill).CornerRadius = UDim.new(1, 0)
 
     local FillGradient = Instance.new("UIGradient")
     FillGradient.Color = ColorSequence.new{
@@ -186,90 +175,98 @@ function VoidLib:CreateWindow(cfg)
 
     local Window = {}
 
-    -- 1. Кнопка в заголовке (как TELEPORT)
-    function Window:AddHeaderButton(text, callback)
-        local TPButton = Instance.new("TextButton")
-        TPButton.Name = "HeaderBtn"
-        TPButton.Size = UDim2.new(0, 60, 0, 20)
-        TPButton.AnchorPoint = Vector2.new(1, 0)
-        TPButton.Position = UDim2.new(1, -8, 0, 6)
-        TPButton.BackgroundColor3 = Color3.fromRGB(60, 0, 120)
-        TPButton.Text = text
-        TPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        TPButton.Font = Enum.Font.GothamBold
-        TPButton.TextSize = 9
-        TPButton.AutoButtonColor = true
-        TPButton.ZIndex = 15
-        TPButton.Parent = MainFrame
+    -- === ГЛАВНАЯ ФУНКЦИЯ ДОБАВЛЕНИЯ КНОПОК ===
+    -- props = { Text="", Size=UDim2, Position=UDim2, Style="Purple" or "RedStroke", Callback=fn }
+    function Window:AddButton(props)
+        props = props or {}
+        local bText = props.Text or "Button"
+        local bSize = props.Size or UDim2.new(0, 60, 0, 20)
+        local bPos = props.Position or UDim2.new(1, -70, 0, 5)
+        local bStyle = props.Style or "Purple" -- "Purple" (как Teleport) или "RedStroke" (как Block)
+        local callback = props.Callback or function() end
 
-        local BtnCorner = Instance.new("UICorner")
-        BtnCorner.CornerRadius = UDim.new(0, 4)
-        BtnCorner.Parent = TPButton
+        local BtnObject = nil
 
-        local BtnStroke = Instance.new("UIStroke")
-        BtnStroke.Thickness = 1
-        BtnStroke.Color = Color3.fromRGB(150, 50, 255)
-        BtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        BtnStroke.Parent = TPButton
+        if bStyle == "Purple" then
+            -- Стиль 1: Фиолетовая заливка (Как Teleport)
+            local TPButton = Instance.new("TextButton")
+            TPButton.Size = bSize
+            TPButton.Position = bPos
+            TPButton.BackgroundColor3 = Color3.fromRGB(60, 0, 120)
+            TPButton.Text = bText
+            TPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            TPButton.Font = Enum.Font.GothamBold
+            TPButton.TextSize = 9
+            TPButton.AutoButtonColor = true
+            TPButton.ZIndex = 15
+            TPButton.Parent = MainFrame
+            
+            -- Если передан AnchorPoint, используем его, иначе дефолт 0,0
+            if props.AnchorPoint then TPButton.AnchorPoint = props.AnchorPoint end
+
+            local BtnCorner = Instance.new("UICorner")
+            BtnCorner.CornerRadius = UDim.new(0, 4)
+            BtnCorner.Parent = TPButton
+
+            local BtnStroke = Instance.new("UIStroke")
+            BtnStroke.Thickness = 1
+            BtnStroke.Color = Color3.fromRGB(150, 50, 255)
+            BtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            BtnStroke.Parent = TPButton
+            
+            TPButton.MouseButton1Click:Connect(function() callback(TPButton) end)
+            BtnObject = TPButton
+
+        elseif bStyle == "RedStroke" then
+            -- Стиль 2: Прозрачная с красной обводкой (Как Block)
+            local Container = Instance.new("Frame")
+            Container.Size = bSize
+            Container.Position = bPos
+            Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            Container.ZIndex = 15
+            Container.Parent = MainFrame
+            
+            if props.AnchorPoint then Container.AnchorPoint = props.AnchorPoint end
+
+            local ContainerCorner = Instance.new("UICorner")
+            ContainerCorner.CornerRadius = UDim.new(0, 4)
+            ContainerCorner.Parent = Container
+
+            local ContainerStroke = Instance.new("UIStroke")
+            ContainerStroke.Thickness = 1.5
+            ContainerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            ContainerStroke.Color = Color3.fromRGB(255, 50, 50)
+            ContainerStroke.Parent = Container
+
+            local ContainerGradient = Instance.new("UIGradient")
+            ContainerGradient.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0.00, Color3.fromRGB(200, 20, 20)),
+                ColorSequenceKeypoint.new(1.00, Color3.fromRGB(100, 10, 10))
+            }
+            ContainerGradient.Parent = Container
+
+            local Btn = Instance.new("TextButton")
+            Btn.Size = UDim2.new(1, 0, 1, 0)
+            Btn.BackgroundTransparency = 1
+            Btn.Text = bText
+            Btn.TextColor3 = Color3.fromRGB(255, 255, 255) 
+            Btn.Font = Enum.Font.GothamBlack
+            Btn.TextSize = 10
+            Btn.ZIndex = 100 
+            Btn.Parent = Container
+            
+            Btn.MouseButton1Click:Connect(function() callback(Btn) end)
+            BtnObject = Container
+        end
         
-        TPButton.MouseButton1Click:Connect(function()
-            if callback then callback(TPButton) end
-        end)
-        
-        return TPButton
+        return BtnObject
     end
 
-    -- 2. Кнопка с градиентной обводкой (как BLOCK)
-    function Window:AddContentButton(text, callback)
-        local Container = Instance.new("Frame")
-        Container.Name = "BtnContainer"
-        Container.Size = UDim2.new(0, 75, 0, 22)
-        Container.AnchorPoint = Vector2.new(1, 0)
-        Container.Position = UDim2.new(1, -75, 0, 5) -- Позиция фиксирована как в оригинале
-        Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        Container.ZIndex = 15
-        Container.Parent = MainFrame
-
-        local ContainerCorner = Instance.new("UICorner")
-        ContainerCorner.CornerRadius = UDim.new(0, 4)
-        ContainerCorner.Parent = Container
-
-        local ContainerStroke = Instance.new("UIStroke")
-        ContainerStroke.Thickness = 1.5
-        ContainerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        ContainerStroke.Color = Color3.fromRGB(255, 50, 50)
-        ContainerStroke.Parent = Container
-
-        local ContainerGradient = Instance.new("UIGradient")
-        ContainerGradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0.00, Color3.fromRGB(200, 20, 20)),
-            ColorSequenceKeypoint.new(1.00, Color3.fromRGB(100, 10, 10))
-        }
-        ContainerGradient.Parent = Container
-
-        local Btn = Instance.new("TextButton")
-        Btn.Name = "ActionBtn"
-        Btn.Size = UDim2.new(1, 0, 1, 0)
-        Btn.BackgroundTransparency = 1
-        Btn.Text = text
-        Btn.TextColor3 = Color3.fromRGB(255, 255, 255) 
-        Btn.Font = Enum.Font.GothamBlack
-        Btn.TextSize = 10
-        Btn.ZIndex = 100 
-        Btn.Parent = Container
-        
-        Btn.MouseButton1Click:Connect(function()
-            if callback then callback() end
-        end)
-    end
-
-    -- 3. Обновление текста (Target / Value)
     function Window:UpdateStatus(name, value)
         TargetName.Text = name or ""
         TargetValue.Text = value or ""
     end
 
-    -- 4. Анимация полоски
     local tweenBar = nil
     function Window:AnimateBar(duration)
         if tweenBar then tweenBar:Cancel() end
