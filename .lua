@@ -1,5 +1,5 @@
 --!strict
--- // ICE LIBRARY: MODULAR UI SYSTEM // --
+-- // ICE LIBRARY: FIXED SETTINGS & TABS // --
 
 local Library = {}
 Library.__index = Library
@@ -7,20 +7,17 @@ Library.__index = Library
 local Services = {
     TweenService = game:GetService("TweenService"),
     UserInputService = game:GetService("UserInputService"),
-    RunService = game:GetService("RunService"),
     HttpService = game:GetService("HttpService"),
     CoreGui = game:GetService("CoreGui"),
     Players = game:GetService("Players")
 }
 
--- // КОНСТАНТЫ // --
 local DEBOUNCE_TIME = 0.2
 
--- Стандартная тема (можно менять при создании окна)
 local DefaultTheme = {
     Background = Color3.fromRGB(18, 18, 24),
     Header = Color3.fromRGB(24, 24, 32),
-    HeaderButton = Color3.fromRGB(32, 32, 42), -- Новый цвет для кнопок шапки
+    HeaderButton = Color3.fromRGB(32, 32, 42),
     Section = Color3.fromRGB(28, 28, 38),
     Text = Color3.fromRGB(240, 240, 240),
     TextDim = Color3.fromRGB(140, 140, 150),
@@ -29,7 +26,7 @@ local DefaultTheme = {
     Notification = Color3.fromRGB(25, 25, 35)
 }
 
--- // УТИЛИТЫ // --
+-- // UTILITY // --
 local Utility = {}
 local DebounceStore = {}
 
@@ -82,7 +79,7 @@ function Utility:MakeDraggable(frame: Frame, handle: GuiObject)
     end)
 end
 
--- // МЕНЕДЖЕР КОНФИГА // --
+-- // CONFIG MANAGER // --
 local ConfigManager = { Settings = {}, File = "IceLib_Config.json" }
 
 function ConfigManager:Load(fileName: string)
@@ -109,22 +106,14 @@ function ConfigManager:GetValue(flag: string, default: any)
     return self.Settings[flag] ~= nil and self.Settings[flag] or default
 end
 
--- // КЛАССЫ UI // --
-
+-- // WINDOW SYSTEM // --
 local Window = {}
 Window.__index = Window
 
 local Tab = {}
 Tab.__index = Tab
 
--- Создание окна (Главная функция)
-function Library:CreateWindow(Config: { 
-    Title: string, 
-    Size: UDim2?, 
-    Icon: string?,
-    Theme: table?,
-    ConfigFile: string?
-})
+function Library:CreateWindow(Config: { Title: string, Size: UDim2?, Icon: string?, Theme: table?, ConfigFile: string? })
     local self = setmetatable({}, Window)
     
     self.Config = Config
@@ -132,18 +121,16 @@ function Library:CreateWindow(Config: {
     self.Tabs = {}
     self.IsMinimized = false
     
-    -- Инициализация конфига
     ConfigManager:Load(Config.ConfigFile)
 
     local container = Utility:GetSafeContainer()
-    -- Удаляем старое, если есть (по названию тайтла)
     local guiName = "IceLib_" .. (Config.Title:gsub("%s+", ""))
     for _, v in pairs(container:GetChildren()) do if v.Name == guiName then v:Destroy() end end
 
     self.Gui = Utility:Create("ScreenGui", {Name = guiName, Parent = container, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
     
-    -- Main Frame (Используем размер из конфига или дефолтный)
-    local finalSize = Config.Size or UDim2.new(0, 500, 0, 350)
+    -- Исправлен дефолтный размер на более узкий
+    local finalSize = Config.Size or UDim2.new(0, 320, 0, 400)
     self.OriginalHeight = finalSize.Y.Offset
     
     self.MainFrame = Utility:Create("Frame", {
@@ -160,19 +147,31 @@ function Library:CreateWindow(Config: {
         BackgroundTransparency = 1
     })
     
-    -- Контейнер для уведомлений
     self.NotificationHolder = Utility:Create("Frame", {
         Name = "Notifications", Parent = self.Gui,
         Size = UDim2.new(0, 250, 1, 0), Position = UDim2.new(1, -260, 0, 20),
         BackgroundTransparency = 1
     })
-    Utility:Create("UIListLayout", {
-        Parent = self.NotificationHolder, SortOrder = Enum.SortOrder.LayoutOrder, 
-        Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Bottom
-    })
+    Utility:Create("UIListLayout", { Parent = self.NotificationHolder, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Bottom })
 
     self:_BuildHeader()
     return self
+end
+
+function Window:SelectTab(tabName: string)
+    local found = false
+    for _, tab in ipairs(self.Tabs) do
+        if tab.Name == tabName then
+            tab.Container.Visible = true
+            found = true
+        else
+            tab.Container.Visible = false
+        end
+    end
+    -- Если вкладка не найдена, сообщаем об этом (для отладки)
+    if not found then 
+        self:Notify("System", "Tab '"..tabName.."' not found!", 2)
+    end
 end
 
 function Window:_BuildHeader()
@@ -182,7 +181,6 @@ function Window:_BuildHeader()
     })
     Utility:Create("UICorner", {CornerRadius = UDim.new(0, 10), Parent = Header})
     
-    -- Filler для прямых нижних углов
     self.HeaderFiller = Utility:Create("Frame", { 
         Parent = Header, Size = UDim2.new(1, 0, 0, 10), Position = UDim2.new(0, 0, 1, -10),
         BackgroundColor3 = self.Theme.Header, BorderSizePixel = 0
@@ -190,14 +188,12 @@ function Window:_BuildHeader()
     
     Utility:MakeDraggable(self.MainFrame, Header)
 
-    -- Иконка (Настраиваемая)
     local iconId = self.Config.Icon or "rbxassetid://130389626803525"
     Utility:Create("ImageLabel", {
         Parent = Header, Size = UDim2.new(0, 28, 0, 28), Position = UDim2.new(0, 12, 0, 11),
         BackgroundTransparency = 1, Image = iconId, ImageColor3 = self.Theme.Accent
     })
 
-    -- Заголовок
     Utility:Create("TextLabel", {
         Parent = Header, Text = self.Config.Title,
         Size = UDim2.new(0, 200, 1, 0), Position = UDim2.new(0, 50, 0, 0),
@@ -205,7 +201,6 @@ function Window:_BuildHeader()
         Font = Enum.Font.GothamBlack, TextSize = 18, TextColor3 = self.Theme.Text
     })
 
-    -- // НОВЫЕ КНОПКИ (БОЛЬШИЕ И ТЕМНЫЕ) // --
     local BtnContainer = Utility:Create("Frame", {
         Parent = Header, Size = UDim2.new(0, 100, 1, 0), Position = UDim2.new(1, -100, 0, 0), BackgroundTransparency = 1
     })
@@ -216,9 +211,8 @@ function Window:_BuildHeader()
     })
     Utility:Create("UIPadding", {Parent = BtnContainer, PaddingRight = UDim.new(0, 12)})
 
-    -- Функция для создания красивой кнопки шапки
     local function CreateHeaderBtn(iconOrText: string, isText: boolean, callback)
-        local Frame = Utility:Create("TextButton", { -- Используем TextButton как контейнер чтобы кликалось везде
+        local Frame = Utility:Create("TextButton", { 
             Parent = BtnContainer, Size = UDim2.new(0, 32, 0, 32),
             BackgroundColor3 = self.Theme.HeaderButton, AutoButtonColor = false, Text = ""
         })
@@ -237,7 +231,6 @@ function Window:_BuildHeader()
             })
         end
 
-        -- Анимация наведения
         Frame.MouseEnter:Connect(function() 
             Utility:Tween(Frame, TweenInfo.new(0.2), {BackgroundColor3 = self.Theme.Accent})
             if isText then Utility:Tween(Content, TweenInfo.new(0.2), {TextColor3 = Color3.new(1,1,1)})
@@ -250,10 +243,9 @@ function Window:_BuildHeader()
         end)
         
         Frame.MouseButton1Click:Connect(callback)
-        return Content -- Возвращаем контент, чтобы можно было менять (например текст + на -)
+        return Content
     end
 
-    -- Кнопка Свернуть
     local MinLabel = CreateHeaderBtn("−", true, function()
         self.IsMinimized = not self.IsMinimized
         if self.IsMinimized then
@@ -267,11 +259,9 @@ function Window:_BuildHeader()
         end
     end)
 
-    -- Кнопка Настройки (В данном примере просто принт, можно привязать открытие таба)
+    -- ИСПРАВЛЕНИЕ: Теперь кнопка вызывает функцию SelectTab("Settings")
     CreateHeaderBtn("rbxassetid://6031280882", false, function()
-        self:Notify("Settings", "Settings button clicked!", 2)
-        -- Здесь можно добавить логику переключения на вкладку настроек
-        -- Например: self:SelectTab("Settings")
+        self:SelectTab("Settings")
     end)
 end
 
@@ -287,9 +277,7 @@ function Window:AddTab(name: string)
         ScrollBarImageColor3 = self.Theme.Accent, Visible = (#self.Tabs == 0)
     })
     
-    Utility:Create("UIListLayout", {
-        Parent = newTab.Container, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder
-    })
+    Utility:Create("UIListLayout", { Parent = newTab.Container, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder })
     Utility:Create("UIPadding", {Parent = newTab.Container, PaddingBottom = UDim.new(0, 10)})
     
     table.insert(self.Tabs, newTab)
@@ -300,15 +288,11 @@ function Window:Notify(title: string, text: string, duration: number)
     local frame = Utility:Create("Frame", {
         Parent = self.NotificationHolder, Size = UDim2.new(1, 0, 0, 60),
         BackgroundColor3 = self.Theme.Notification, BackgroundTransparency = 0.1,
-        Position = UDim2.new(1, 20, 0, 0) -- Начало за экраном (для анимации)
     })
     Utility:Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
     Utility:Create("UIStroke", {Color = self.Theme.Stroke, Thickness = 1, Parent = frame})
     
-    -- Полоска сбоку
-    local bar = Utility:Create("Frame", {
-        Parent = frame, Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = self.Theme.Accent
-    })
+    local bar = Utility:Create("Frame", { Parent = frame, Size = UDim2.new(0, 4, 1, 0), BackgroundColor3 = self.Theme.Accent })
     Utility:Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = bar})
     
     Utility:Create("TextLabel", {
@@ -323,19 +307,11 @@ function Window:Notify(title: string, text: string, duration: number)
         TextColor3 = self.Theme.TextDim, TextXAlignment = Enum.TextXAlignment.Left
     })
     
-    -- Анимация появления
-    -- Примечание: UIListLayout мешает позиционированию, поэтому просто фейдим или используем Layout
-    -- Для ListLayout анимация Position не всегда работает корректно, лучше использовать Transparency или Size
-    -- Но для простоты оставим создание и удаление.
-    
     task.delay(duration or 3, function()
         Utility:Tween(frame, TweenInfo.new(0.5), {BackgroundTransparency = 1})
-        -- Tween текста тоже нужен, но для краткости просто удаляем
         frame:Destroy()
     end)
 end
-
--- // ЭЛЕМЕНТЫ ВКЛАДОК // --
 
 function Tab:AddToggle(text: string, flag: string, callback: (...any) -> any)
     local defaultState = ConfigManager:GetValue(flag, false)
@@ -373,13 +349,10 @@ function Tab:AddToggle(text: string, flag: string, callback: (...any) -> any)
         Utility:Debounce(flag or text, function()
             currentState = not currentState
             ConfigManager:SetValue(flag, currentState)
-            
             local targetPos = currentState and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
             local targetColor = currentState and self.Window.Theme.Accent or self.Window.Theme.Stroke
-            
             Utility:Tween(Circle, TweenInfo.new(0.2), {Position = targetPos})
             Utility:Tween(Switch, TweenInfo.new(0.2), {BackgroundColor3 = targetColor})
-            
             if callback then callback(currentState) end
         end)
     end)
